@@ -1,0 +1,26 @@
+
+source_files = (
+        "main.cpp",
+        "Interpreter/Interpreter.cpp",
+        "Interpreter/ExternalFunctions.cpp",
+        "Interpreter/Execution.cpp",
+        "Interpreter/ExecutionState.cpp",
+        "MManagment/MemoryManager.cpp",
+        "MManagment/MemoryMapping.cpp",
+        "MManagment/MemoryObjects.cpp",
+        "MPI/InterpreterMPI.cpp",
+        "MPI/ProgramState.cpp",
+        "MPI/ProcessState.cpp",
+        "MPI/StateSpace.cpp",
+        "MPI/Node.cpp",
+        "MPI/Request.cpp",
+        "MPI/Message.cpp",
+        "Utils/XML.cpp",
+        "Utils/Hash.cpp",
+        "Utils/HashDigest.cpp",
+        "Utils/Debug.cpp",
+)
+
+def build(ctx):
+    ctx.program(source=source_files,
+                target="aislinn", use="LLVM")

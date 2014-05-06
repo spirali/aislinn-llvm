@@ -1,0 +1,7 @@
+.*
+*~
+*.sw?
+*.pyc
+/build
+/tests/build
+tags
