@@ -8,16 +8,31 @@
 //===----------------------------------------------------------------------===//
 
 #include "MemoryManager.h"
+#include <stdio.h>
 
 using namespace aislinn;
 
 MemoryManager *aislinn::TheMemoryManager = NULL;
 size_t aislinn::PageSize = 0;
 
-MemoryManager::MemoryManager()
+MemoryManager::MemoryManager(size_t AddressSpaceSize) :
+  AddressSpaceSize(AddressSpaceSize)
 {
-  AddressSpaceSize = 100 * PageSize;
-  AddressSpace = mmap(NULL, AddressSpaceSize, PROT_NONE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+  AddressSpace = mmap(NULL,
+                      AddressSpaceSize,
+                      PROT_NONE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+  if (AddressSpace == MAP_FAILED) {
+    perror("MemoryManager initialization");
+    exit(1);
+  }
+}
+
+MemoryManager::~MemoryManager()
+{
+  if (!munmap(AddressSpace, AddressSpaceSize)) {
+    perror("MemoryManager descructor");
+    exit(1);
+  }
 }
 
 void MemoryManager::dump() {
@@ -55,6 +70,13 @@ void MemoryManager::setMapping(MemoryMapping *Mapping) {
 
 void* MemoryManager::allocPage() {
   size_t Index = Mapping->allocPage();
+  if (Index >= AddressSpaceSize / PageSize) {
+    // TODO: Implement variant that signals error and do not exit
+    fprintf(stderr, "Address space is full. "
+                    "Application allocate to much memory. "
+                    "The limit can be adjusted through --address-space-size");
+    exit(1);
+  }
   fillPagesUpToIndex(Index);
   swapPage(Index);
   MemoryPage *Page = Mapping->getPage(Index);
@@ -141,14 +163,28 @@ static void signal_handler(int sig, siginfo_t *si, void *unused)
   exit(1);
 }
 
-void MemoryManager::init()
+void MemoryManager::init(size_t AddressSpaceSize)
 {
   if (TheMemoryManager != NULL) {
     fprintf(stderr, "Memory manager is already initialized\n");
     exit(1);
   }
   PageSize = getpagesize();
-  TheMemoryManager = new MemoryManager();
+
+  if (AddressSpaceSize == 0) { // Use default
+    if (sizeof(void*) == 4) {
+      AddressSpaceSize = 128 * 1024 * 1024; // 128MB on 32b architecture
+    } else {
+      AddressSpaceSize = 1024 * 1024 * 1024; // 1GB on 64b architecture
+    }
+  }
+
+  if (AddressSpaceSize % PageSize != 0) {
+    fprintf(stderr, "Size of address space is not multiple of page size\n");
+    exit(1);
+  }
+
+  TheMemoryManager = new MemoryManager(AddressSpaceSize);
 
   struct sigaction sa;
   sa.sa_flags = SA_SIGINFO;

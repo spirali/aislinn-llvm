@@ -18,6 +18,7 @@ source_files = (
         "Utils/XML.cpp",
         "Utils/Hash.cpp",
         "Utils/HashDigest.cpp",
+        "Utils/String.cpp",
         "Utils/Debug.cpp",
 )
 

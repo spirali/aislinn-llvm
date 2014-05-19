@@ -1,5 +1,5 @@
 
-from utils import Program
+from utils import Program, check_prefix
 import unittest
 
 class BasicTests(unittest.TestCase):
@@ -65,6 +65,18 @@ class BasicTests(unittest.TestCase):
 
         report = program.run(2, ("0", "2"))
         self.exit_code_error(report, 0, 2)
+
+    def test_address_space(self):
+        program = Program("basic", "malloc")
+
+        self.no_errors(program.run(1, ("100",)))
+        self.no_errors(program.run(1, ("100",), address_space_size="1M"))
+        self.no_errors(program.run(1,
+                                   ("10000000",),
+                                   exitcode=1,
+                                   stderr=check_prefix("Address space is full"),
+                                   address_space_size="1M"))
+        self.no_errors(program.run(1, ("10000000",), address_space_size="100M"))
 
 if __name__ == "__main__":
     unittest.main()

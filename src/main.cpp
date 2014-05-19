@@ -17,6 +17,7 @@
 #include "MPI/StateSpace.h"
 #include "Utils/XML.h"
 #include "Utils/Debug.h"
+#include "Utils/String.h"
 
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LLVMContext.h"
@@ -50,6 +51,13 @@ namespace {
 
   cl::opt<int>
   VerbosityLevelArg("verbose", cl::desc("Verbosity level. Default: 0"), cl::init(0));
+
+  cl::opt<std::string>
+  AddressSpaceSizeStr("address-space-size",
+    cl::desc("Size of address space in bytes. "
+             "Default: 1G (on 64b) / 128M (on 32b)"),
+    cl::init("default"));
+
 }
 
 static bool init(int argc, char **argv) {
@@ -111,7 +119,15 @@ int main(int argc, char **argv, char* const* envp)
     return 1;
   }
 
-  MemoryManager::init();
+  size_t ASpaceSize = 0;
+  if (AddressSpaceSizeStr != "default") {
+    ASpaceSize = parseSizeString(AddressSpaceSizeStr);
+    if (ASpaceSize == 0) {
+      llvm::errs() << "Invalid address space size";
+      return 1;
+    }
+  }
+  MemoryManager::init(ASpaceSize);
 
   LLVMContext &Context = getGlobalContext();
   SMDiagnostic Err;

@@ -27,9 +27,10 @@ class MemoryManager {
   MemoryMapping *Mapping;
 
   public:
-    static void init();
+    static void init(size_t AddressSpaceSize);
 
-    MemoryManager();
+    MemoryManager(size_t AddressSpaceSize);
+    ~MemoryManager();
 
     void dump();
     void setMapping(MemoryMapping *Mapping);

@@ -25,22 +25,64 @@ def cleanup_build_dir():
     else:
         os.makedirs(AISLINN_BUILD)
 
-def run(args, cwd=None, no_output=False):
+def cleanup_report():
+    reportfile = os.path.join(AISLINN_BUILD, "report.xml")
+    if os.path.isfile(reportfile):
+        os.unlink(reportfile)
+
+
+def run(args,
+        cwd=None):
     p = subprocess.Popen(args,
                          cwd=cwd,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
     stdout, stderr = p.communicate()
-    if p.returncode != 0:
-        raise Exception("Nonzero return code ({0})\n"
-                "program: {1}\nstdout:\n{2}stderr:\n{3}\n"
-                .format(p.returncode, args, stdout, stderr))
-    if no_output and stdout:
-        raise Exception("Expected empty std ouput, but got {0} (program: {1})"
-                .format(stdout, args))
-    if no_output and stderr:
-        raise Exception("Expected empty std error, but got {0} (program: {1})"
-                .format(stderr, args))
+    return (p.returncode, stdout, stderr)
+
+def check_prefix(prefix):
+    def fn(value):
+        if not value.startswith(prefix):
+            return "Expected prefix " + prefix
+    return fn
+
+def run_and_check(args,
+                  cwd=None,
+                  exitcode=0,
+                  stdout="",
+                  stderr=""):
+    def raise_exception(message):
+        raise Exception(message +
+                "\nprogram: {0}\nstdout:\n{1}stderr:\n{2}\n"
+                .format(args, r_stdout, r_stderr))
+
+    r_exitcode, r_stdout, r_stderr = run(args, cwd)
+    if exitcode != r_exitcode:
+        raise_exception("Exitcode {0} excepted but got {1}".format(exitcode,
+                                                                   r_exitcode))
+    if stdout is not None:
+        if isinstance(stdout, str):
+            if stdout != r_stdout:
+                if stdout == "":
+                    stdout = ">>> empty <<<"
+                raise_exception("Got unexpected stdout.\n"
+                                "Expected stdout:\n{0}".format(stdout))
+        else:
+            r = stdout(r_stdout)
+            if r is not None:
+                raise_exception("Expected stdout: " + r)
+
+    if stderr is not None:
+        if isinstance(stderr, str):
+            if stderr != r_stderr:
+                if stderr == "":
+                    stderr = ">>> empty <<<"
+                raise_exception("Got unexpected stderr.\n"
+                                "Expected stderr:\n{0}".format(stderr))
+        else:
+            r = stderr(r_stderr)
+            if r is not None:
+                raise_exception("Expected stderr: " + r)
 
 class Program:
 
@@ -52,21 +94,29 @@ class Program:
         cleanup_build_dir()
         args = (AISLINN_CPP,
                 self.path + ".cpp")
-        run(args, cwd=AISLINN_BUILD)
+        run_and_check(args, cwd=AISLINN_BUILD)
         self.is_built = True
 
-    def run(self, processes=1, args=()):
+    def make_args(self, processes, args, address_space_size=None):
+        run_args = [ AISLINN,
+                    "-p={0}".format(processes) ]
+
+        if address_space_size is not None:
+            run_args.append("-address-space-size={0}" \
+                              .format(address_space_size))
+        run_args.append(os.path.basename(self.path) + ".bc")
+        run_args += list(args)
+        return run_args
+
+    def run(self, processes, args=(), exitcode=0, stdout=None, stderr="", **kw):
         if not self.is_built:
             self.build()
-        run_args = (AISLINN,
-                    "-p={0}".format(processes),
-                    os.path.basename(self.path) + ".bc") + args
-        run(run_args, cwd=AISLINN_BUILD)
+        run_and_check(self.make_args(processes, args, **kw),
+                      AISLINN_BUILD,
+                      exitcode,
+                      stdout,
+                      stderr)
         return self.report()
-
-    def build_and_run(self, *args, **kw):
-        self.build()
-        return self.run(*args, **kw)
 
     def report(self):
         filename = os.path.join(AISLINN_BUILD, "report.xml")
