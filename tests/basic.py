@@ -30,6 +30,11 @@ class BasicTests(TestCase):
         self.exit_code_error(0, 21)
         self.assertEquals(self.report.number_of_nodes, 1)
 
+    def test_arg_p(self):
+        self.program("basic", "exitcode")
+        self.execute(-1, exitcode=1, stderr="Invalid number of processes\n")
+        self.execute(0, exitcode=1, stderr="Invalid number of processes\n")
+
     def test_test_recv(self):
         self.program("basic", "test_recv")
 

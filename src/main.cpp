@@ -68,13 +68,28 @@ static bool init(int argc, char **argv) {
                               "MPI verification tool\n");
 
   if (VerbosityLevelArg < 0) {
-    errs() << "Invalid verbosity level";
+    errs() << "Invalid verbosity level\n";
     return false;
   }
   VerbosityLevel = VerbosityLevelArg;
 
-  std::string ErrorStr;
+  if (NumberOfProcesses <= 0) {
+    errs() << "Invalid number of processes\n";
+    return false;
+  }
 
+  size_t ASpaceSize = 0;
+  if (AddressSpaceSizeStr != "default") {
+    ASpaceSize = parseSizeString(AddressSpaceSizeStr);
+    if (ASpaceSize == 0) {
+      llvm::errs() << "Invalid address space size\n";
+      return 1;
+    }
+  }
+  MemoryManager::init(ASpaceSize);
+
+
+  std::string ErrorStr;
   // NULL = load program itself, not a library
   if (sys::DynamicLibrary::LoadLibraryPermanently(NULL, &ErrorStr)) {
     errs() << "LoadLibraryPermanently: " << ErrorStr;
@@ -118,16 +133,6 @@ int main(int argc, char **argv, char* const* envp)
   if (!init(argc, argv)) {
     return 1;
   }
-
-  size_t ASpaceSize = 0;
-  if (AddressSpaceSizeStr != "default") {
-    ASpaceSize = parseSizeString(AddressSpaceSizeStr);
-    if (ASpaceSize == 0) {
-      llvm::errs() << "Invalid address space size";
-      return 1;
-    }
-  }
-  MemoryManager::init(ASpaceSize);
 
   LLVMContext &Context = getGlobalContext();
   SMDiagnostic Err;
