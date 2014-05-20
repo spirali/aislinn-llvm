@@ -2,10 +2,10 @@
 from utils import check_prefix, TestCase
 import unittest
 
-class BasicTests(TestCase):
+class BaseTests(TestCase):
 
-    def test_nompi(self):
-        self.program("basic", "nompi")
+    def test_helloworld(self):
+        self.program("base", "helloworld")
 
         self.execute(1)
         self.no_errors()
@@ -15,40 +15,19 @@ class BasicTests(TestCase):
         self.no_errors()
         self.assertEquals(self.report.number_of_nodes, 1)
 
-    def test_isend_irecv(self):
-        self.program("basic", "isir")
-
-        self.execute(2, ("1",))
-        self.no_errors()
-
-        self.execute(2, ("0",))
-        self.single_error("deadlock")
-
     def test_exitcode(self):
-        self.program("basic", "exitcode")
+        self.program("base", "exitcode")
         self.execute(1)
         self.exit_code_error(0, 21)
         self.assertEquals(self.report.number_of_nodes, 1)
 
     def test_arg_p(self):
-        self.program("basic", "exitcode")
+        self.program("base", "exitcode")
         self.execute(-1, exitcode=1, stderr="Invalid number of processes\n")
         self.execute(0, exitcode=1, stderr="Invalid number of processes\n")
 
-    def test_test_recv(self):
-        self.program("basic", "test_recv")
-
-        self.execute(2, ("0", "0"))
-        self.no_errors()
-
-        self.execute(2, ("1", "0"))
-        self.exit_code_error(0, 1)
-
-        self.execute(2, ("0", "2"))
-        self.exit_code_error(0, 2)
-
     def test_address_space(self):
-        self.program("basic", "malloc")
+        self.program("base", "malloc")
 
         self.execute(1, ("100",))
         self.no_errors()
@@ -67,7 +46,7 @@ class BasicTests(TestCase):
         self.no_errors()
 
     def test_malloc_free(self):
-        self.program("basic", "mallocfree")
+        self.program("base", "mallocfree")
         self.execute(1)
         self.no_errors()
 
