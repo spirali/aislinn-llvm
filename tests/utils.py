@@ -2,6 +2,7 @@ import os
 import subprocess
 import shutil
 import sys
+import unittest
 
 AISLINN_TESTS = os.path.dirname(os.path.abspath(__file__))
 AISLINN_ROOT = os.path.dirname(AISLINN_TESTS)
@@ -13,6 +14,51 @@ AISLINN_CPP = os.path.join(AISLINN_BIN, "aislinn-c++")
 
 sys.path.append(os.path.join(AISLINN_ROOT, "tools", "reporttool"))
 import report
+
+class TestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.report = None
+        self.program_instance = None
+
+    def read_report(self):
+        filename = os.path.join(AISLINN_BUILD, "report.xml")
+        self.report = report.Report(filename)
+
+    def no_errors(self):
+        if self.report is None:
+            self.read_report()
+        self.assertEquals(len(self.report.errors()), 0)
+
+    def single_error(self, error_type):
+        if self.report is None:
+            self.read_report()
+        errors = self.report.errors()
+        self.assertEquals(len(errors), 1)
+        error = errors[0]
+        self.assertEquals(error.get("type"), error_type)
+        return error
+
+    def check_child(self, element, name, value):
+        child = element.find(name)
+        self.assertTrue(child is not None,
+                        "Node {0} has not child {1}".format(element, name))
+        self.assertEquals(element.find(name).text, str(value))
+
+    def exit_code_error(self, rank, exitcode=0):
+        if self.report is None:
+            self.read_report()
+        error = self.single_error("exitcode")
+        self.assertEquals(error.get("rank"), str(rank))
+        self.assertEquals(error.get("exitcode"), str(exitcode))
+
+    def program(self, *args, **kw):
+        self.program_instance = Program(*args, **kw)
+
+    def execute(self, *args, **kw):
+        self.assertTrue(self.program_instance is not None)
+        self.report = None
+        self.program_instance.run(*args, **kw)
 
 def cleanup_build_dir():
     if os.path.isdir(AISLINN_BUILD):
@@ -111,12 +157,13 @@ class Program:
     def run(self, processes, args=(), exitcode=0, stdout=None, stderr="", **kw):
         if not self.is_built:
             self.build()
+        else:
+            cleanup_report()
         run_and_check(self.make_args(processes, args, **kw),
                       AISLINN_BUILD,
                       exitcode,
                       stdout,
                       stderr)
-        return self.report()
 
     def report(self):
         filename = os.path.join(AISLINN_BUILD, "report.xml")
