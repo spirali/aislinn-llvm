@@ -66,5 +66,10 @@ class BasicTests(TestCase):
         self.execute(1, ("10000000",), address_space_size="100M")
         self.no_errors()
 
+    def test_malloc_free(self):
+        self.program("basic", "mallocfree")
+        self.execute(1)
+        self.no_errors()
+
 if __name__ == "__main__":
     unittest.main()

@@ -530,6 +530,13 @@ static GenericValue lle_X_malloc(FunctionType *FT,
   return GV;
 }
 
+static GenericValue lle_X_free(FunctionType *FT,
+                               const std::vector<GenericValue> &Args) {
+  assert(Args.size() == 1);
+  TheInterpreter->getState()->free(GVTOP(Args[0]));
+  return GenericValue();
+}
+
 void Interpreter::initializeExternalFunctions() {
   sys::ScopedLock Writer(*FunctionsLock);
   FuncNames["lle_X_atexit"]       = lle_X_atexit;
@@ -546,4 +553,5 @@ void Interpreter::initializeExternalFunctions() {
 
   // Memory allocations
   FuncNames["lle_X_malloc"]       = lle_X_malloc;
+  FuncNames["lle_X_free"]         = lle_X_free;
 }

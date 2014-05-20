@@ -46,37 +46,37 @@ class ExecutionState {
   std::map<llvm::GlobalValue *, void *> GlobalMapping;
 
   public:
-    ExecutionState();
+  ExecutionState();
 
-    std::vector<ExecutionContext>& getECStack() {
-      return ECStack;
-    }
+  std::vector<ExecutionContext>& getECStack() {
+    return ECStack;
+  }
 
-    void makeActive() {
-	MObjects.makeActive();
-    }
+  void makeActive() {
+    MObjects.makeActive();
+  }
 
-    void setGlobalMapping(const llvm::GlobalValue *GV, void *Pointer);
-    void* getPointerToGlobalValue(const llvm::GlobalValue *GV);
+  void setGlobalMapping(const llvm::GlobalValue *GV, void *Pointer);
+  void* getPointerToGlobalValue(const llvm::GlobalValue *GV);
 
-    void *alloc(size_t Size) {
-	return MObjects.alloc(Size);
-    }
+  void *alloc(size_t Size) {
+    return MObjects.alloc(Size);
+  }
 
-    void free(const void *Address) {
-	// TMP HACK: Remove const_cast
-	MObjects.free(const_cast<void*>(Address));
-    }
+  void free(const void *Address) {
+    // TMP HACK: Remove const_cast
+    MObjects.free(const_cast<void*>(Address));
+  }
 
-    void hash(MHASH HashThread);
+  void hash(MHASH HashThread);
 
-    void dump() {
-      MObjects.dump();
-    }
+  void dump() {
+    MObjects.dump();
+  }
 
   protected:
 
-    void* allocMemoryForGV(const llvm::GlobalVariable *GV);
+  void* allocMemoryForGV(const llvm::GlobalVariable *GV);
 };
 
 }
