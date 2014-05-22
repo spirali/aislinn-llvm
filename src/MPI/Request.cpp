@@ -28,7 +28,7 @@ void Request::hash(ProgramState *PState, MHASH HashThread)
       return;
     }
     default:
-        llvm_unreachable("Not implemented request\n");
+      llvm_unreachable("Not implemented request\n");
   }
 }
 

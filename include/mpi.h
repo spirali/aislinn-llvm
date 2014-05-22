@@ -20,6 +20,7 @@ typedef int MPI_Datatype;
 const MPI_Comm MPI_COMM_WORLD = 0;
 const MPI_Datatype MPI_INT = 1;
 #define MPI_STATUS_IGNORE ((MPI_Status*) 0)
+#define MPI_STATUSES_IGNORE ((MPI_Status*) 0)
 #define MPI_ANY_SOURCE -1
 
 /* Public MPI Functions */
@@ -42,6 +43,9 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
         int source, int tag, MPI_Comm comm, MPI_Request *request);
 
 int MPI_Wait(MPI_Request *request, MPI_Status *status);
+
+int MPI_Waitall(int count, MPI_Request array_of_requests[],
+               MPI_Status array_of_statuses[]);
 
 int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status);
 

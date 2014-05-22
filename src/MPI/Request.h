@@ -18,7 +18,8 @@ namespace aislinn {
 enum RequestType {
   REQUEST_SEND,
   REQUEST_SSEND,
-  REQUEST_RECV
+  REQUEST_RECV,
+  REQUEST_RECV_COMPLETED,
 };
 
 class ProgramState;
@@ -36,6 +37,7 @@ struct Request : public RefCountedObj {
     } Receive;
   };
 
+  bool dependsOn(Request *R);
   void dump();
   void hash(ProgramState *PState, MHASH HashThread);
 };

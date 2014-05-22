@@ -30,9 +30,8 @@ class ProgramState;
 
 class ProcessState : public ExecutionState
 {
-
   ProcessStatus Status;
-  int ActiveRequest;
+  std::vector<int> ActiveRequests; // Sorted
   int *FlagPtr;
 
   std::vector<Ref<Request> > Requests;
@@ -41,27 +40,30 @@ class ProcessState : public ExecutionState
   ProcessState();
 
   void setWait(int RequestId) {
-    setStatus(PS_WAIT, RequestId);
+    Status = PS_WAIT;
+    ActiveRequests.clear();
+    ActiveRequests.push_back(RequestId);
+    FlagPtr = NULL;
+  }
+
+  /* Requests has to be sorted! */
+  void setWait(std::vector<int> Requests) {
+    Status = PS_WAIT;
+    ActiveRequests = Requests;
+    FlagPtr = NULL;
   }
 
   void setTest(int RequestId, int* FlagPtr) {
-    setStatus(PS_TEST, RequestId, FlagPtr);
+    Status = PS_TEST;
+    ActiveRequests.clear();
+    ActiveRequests.push_back(RequestId);
+    this->FlagPtr = FlagPtr;
   }
 
   void setFinished() {
     Status = PS_FINISHED;
-    ActiveRequest = -1;
+    ActiveRequests.clear();
     FlagPtr = NULL;
-  }
-
-  void setStatus(ProcessStatus Status, int RequestId, int *FlagPtr = NULL) {
-    assert( \
-        RequestId > 0 && \
-        RequestId < Requests.size() && \
-        Requests[RequestId].get() != NULL);
-    this->Status = Status;
-    this->ActiveRequest = RequestId;
-    this->FlagPtr = FlagPtr;
   }
 
   ProcessStatus getStatus() const {
@@ -72,8 +74,8 @@ class ProcessState : public ExecutionState
     return FlagPtr;
   }
 
-  int getActiveRequest() const {
-    return ActiveRequest;
+  const std::vector<int> & getActiveRequests() const {
+    return ActiveRequests;
   }
 
   const Request *getRequest(int Id) const {
@@ -81,9 +83,29 @@ class ProcessState : public ExecutionState
     return Requests[Id].get();
   }
 
+  int findRequestId(const Request *R) {
+    for (size_t i = 0; i < Requests.size(); i++) {
+      if (Requests[i].get() == R) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  void setRequest(int Id, Request *R) {
+    assert(Id > 0 && Id < Requests.size());
+    Requests[Id] = R;
+  }
+
   void removeRequest(int Id) {
     assert(Id > 0 && Id < Requests.size());
     Requests[Id] = NULL;
+  }
+
+  void removeRequests(const std::vector<int> &Ids) {
+    for (size_t i = 0; i < Ids.size(); i++) {
+      removeRequest(Ids[i]);
+    }
   }
 
   void hash(ProgramState *PState, MHASH HashThread);

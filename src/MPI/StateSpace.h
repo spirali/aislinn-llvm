@@ -62,14 +62,16 @@ class StateSpace
   void computeChilds(Node *RootNode, ProgramState *PState);
   void addError(ErrorTy *Error);
 
-  protected:
+  private:
     void resumeRun(Node *N, const llvm::GenericValue &value) {
       Intr->resumeRun(value);
       afterRunAction(N);
     }
 
     void afterRunAction(Node *N);
-
+    bool checkFastRunWait(Node *RootNode, ProgramState *PState, int rank);
+    void forkWaitOrTest(
+      Node *RootNode, ProgramState *PState, int Rank, ProcessStatus Status);
 };
 
 }

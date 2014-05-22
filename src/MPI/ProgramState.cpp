@@ -79,17 +79,56 @@ void ProgramState::callFunctionAsMainOnAllProcesses(
   }
 }
 
-void ProgramState::collectMessages(int Receiver,
-                                   int Sender,
-                                   int Tag,
-                                   std::vector<Message*> &Out)
+void ProgramState::collectMessagesHelper(
+    int Receiver,
+    const std::vector<const Request*> &RecvRequests,
+    const std::vector<bool> &MustMatch,
+    int Index,
+    std::vector<Message*> &Matched,
+    std::vector<std::vector<Message*> >& Out)
 {
-  for (int i = 0; i < Messages.size(); i++) {
-    if (Messages[i]->Receiver == Receiver && \
-       (Sender == MPI_ANY_SOURCE || Messages[i]->Sender == Sender) && \
-       (Messages[i]->Tag == Tag)) {
-      Out.push_back(Messages[i].get());
+  if (Index == RecvRequests.size()) {
+    Out.push_back(Matched);
+    return;
+  }
+
+  const Request *R = RecvRequests[Index];
+
+  bool flags[getSize()];
+  for (int i = 0; i < getSize(); i++) {
+    flags[i] = false;
+  }
+  bool matched = false;
+
+  for (size_t i = 0; i < Messages.size(); i++) {
+    Message *M = Messages[i].get();
+    if (M->Receiver == Receiver && \
+       (R->Receive.Sender == MPI_ANY_SOURCE || M->Sender == R->Receive.Sender) && \
+       (M->Tag == R->Receive.Tag) && \
+       !flags[M->Sender]) {
+        size_t j;
+        for (j = 0; j < Matched.size(); j++) {
+          if (Matched[j] == M)
+            break;
+        }
+        if (j != Matched.size()) {
+          continue;
+        }
+        matched = true;
+        flags[M->Sender] = true;
+        Matched.push_back(M);
+        collectMessagesHelper(Receiver, RecvRequests, MustMatch, Index + 1, Matched, Out);
+        Matched.pop_back();
     }
+  }
+
+  if (!matched) {
+    if (MustMatch[Index]) {
+      return;
+    }
+    Matched.push_back(NULL);
+    collectMessagesHelper(Receiver, RecvRequests, MustMatch, Index + 1, Matched, Out);
+    Matched.pop_back();
   }
 }
 
@@ -143,7 +182,7 @@ static bool message_sort_helper (const Ref<Message> &m1,
                                  const Ref<Message> &m2)
 {
   return m1->Receiver < m2->Receiver ||
-         (m1->Receiver == m2->Receiver && m2->Sender == m2->Sender);
+         (m1->Receiver == m2->Receiver && m2->Sender < m2->Sender);
 }
 
 HashDigest ProgramState::computeHash()

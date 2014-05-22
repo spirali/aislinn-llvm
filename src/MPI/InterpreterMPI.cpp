@@ -167,6 +167,32 @@ static GenericValue lle_X_MPI_Wait(FunctionType *FT,
   return GV;
 }
 
+static GenericValue lle_X_MPI_Waitall(FunctionType *FT,
+                                      const std::vector<GenericValue> &Args) {
+  assert(Args.size() == 3);
+
+  int Count = static_cast<int>(Args[0].IntVal.getZExtValue());
+  int *RequestIdPtr = static_cast<int*>(Args[1].PointerVal);
+
+  std::vector<int> Requests;
+  for (int I = 0; I < Count; I++) {
+    Requests.push_back(RequestIdPtr[I]);
+  }
+  std::sort(Requests.begin(), Requests.end());
+
+  // TODO: Check that each request is unique
+
+  ProcessState *State = getInterpreter()->getProcessState();
+
+
+  State->setWait(Requests);
+  getInterpreter()->pause();
+
+  GenericValue GV;
+  GV.IntVal = MAKE_INT(0);
+  return GV;
+}
+
 static GenericValue lle_X_MPI_Test(FunctionType *FT,
                                const std::vector<GenericValue> &Args) {
   assert(Args.size() == 3);
@@ -190,6 +216,7 @@ void InterpreterMPI::initializeMPICalls()
   FuncNames["lle_X_MPI_Isend"]     = lle_X_MPI_Isend;
   FuncNames["lle_X_MPI_Irecv"]     = lle_X_MPI_Irecv;
   FuncNames["lle_X_MPI_Wait"]      = lle_X_MPI_Wait;
+  FuncNames["lle_X_MPI_Waitall"]   = lle_X_MPI_Waitall;
   FuncNames["lle_X_MPI_Test"]      = lle_X_MPI_Test;
 }
 

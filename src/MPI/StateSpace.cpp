@@ -150,6 +150,172 @@ void StateSpace::writeDotFile(const std::string &Filename) const
   fclose(f);
 }
 
+bool StateSpace::checkFastRunWait(
+  Node *RootNode,
+  ProgramState *PState,
+  int Rank)
+{
+  ProcessState *State = PState->getProcessState(Rank);
+  const std::vector<int> &RequestIds = State->getActiveRequests();
+
+  for (size_t i = 0; i < RequestIds.size(); i++) {
+    const Request *R = State->getRequest(RequestIds[i]);
+    switch (R->Type) {
+      case REQUEST_SSEND:
+        if (PState->checkMessage(R->Msg.get())) {
+          return false; // Message was no received yet
+        }
+        break;
+      case REQUEST_RECV_COMPLETED:
+        break;
+      default:
+        return false;
+    }
+  }
+
+  IFVERBOSE(1) {
+    llvm::errs() << "Fast run on rank " << Rank << " Wait / SSEND\n";
+  }
+
+  Intr->setProgramState(PState, Rank);
+  State->removeRequests(RequestIds);
+  llvm::GenericValue GV;
+  GV.IntVal = llvm::APInt(sizeof(int) * 8, 0);
+  resumeRun(RootNode, GV);
+
+  Node *N = getNode(PState);
+  std::stringstream Info;
+  Info << Rank << ":w/";
+
+  for (size_t i = 0; i < RequestIds.size(); i++) {
+    const Request *R = State->getRequest(RequestIds[i]);
+    switch (R->Type) {
+      case REQUEST_SSEND:
+        Info << "ss;";
+        break;
+      default:
+        llvm_unreachable("Invalid request type");
+    }
+  }
+
+  RootNode->addArc(Arc(Info.str(), N));
+  return true;
+}
+
+void StateSpace::forkWaitOrTest(
+    Node *RootNode,
+    ProgramState *PState,
+    int Rank,
+    ProcessStatus Status)
+{
+  if (Status == PS_TEST) {
+    IFVERBOSE(1) {
+      llvm::errs() << "Fork on rank " << Rank << " PS_TEST / flag = 0\n";
+    }
+    ProgramState *NewState = new ProgramState(PState);
+    Intr->setProgramState(NewState, Rank);
+
+    llvm::GenericValue GV;
+    GV.IntVal = llvm::APInt(sizeof(int) * 8, 0);
+    resumeRun(RootNode, GV);
+    Node *N = getNode(NewState);
+
+    std::stringstream Info;
+    Info << Rank << ":t0";
+    RootNode->addArc(Arc(Info.str(), N));
+  }
+
+  ProcessState *State = PState->getProcessState(Rank);
+  const std::vector<int> &RequestIds = State->getActiveRequests();
+
+  std::vector<std::vector <Message*> > MessageMatches;
+
+  int MaxRecvId = -1;
+
+  for (size_t i = 0; i < RequestIds.size(); i++) {
+    const Request *R = State->getRequest(RequestIds[i]);
+    switch (R->Type) {
+      case REQUEST_SSEND:
+        if (PState->checkMessage(R->Msg.get())) {
+          return; // Message was no received yet
+        }
+        break;
+      case REQUEST_RECV_COMPLETED:
+        break;
+      case REQUEST_RECV:
+        MaxRecvId = RequestIds[i];
+        break;
+      default:
+        llvm_unreachable("Unknown request type in checkForWaitTest");
+    }
+  }
+
+  std::vector<const Request* > ReceiveRequests;
+  std::vector<bool> MustMatch;
+  if (MaxRecvId >= 0) {
+    for (int i = 0; i <= MaxRecvId; i++) {
+      const Request *R = State->getRequest(i);
+      if (R == NULL) {
+	continue;
+      }
+      if (R->Type == REQUEST_RECV) {
+        ReceiveRequests.push_back(R);
+        MustMatch.push_back(std::find(RequestIds.begin(),
+                                          RequestIds.end(),
+                                          i) != RequestIds.end());
+      }
+    }
+    PState->collectMessages(Rank, ReceiveRequests, MustMatch, MessageMatches);
+  } else {
+    MessageMatches.push_back(std::vector<Message*>());
+  }
+
+  for (int i = 0; i < MessageMatches.size(); i++) {
+    std::vector<Message*> &MList = MessageMatches[i];
+    IFVERBOSE(1) {
+      llvm::errs() << "Fork on rank " << Rank << " PS_TEST|PS_WAIT / RECV\n";
+    }
+
+    ProgramState *NewState = new ProgramState(PState);
+    Intr->setProgramState(NewState, Rank);
+
+    if (State->getFlagPtr()) {
+      *(State->getFlagPtr()) = 1;
+    }
+
+    ProcessState *S = NewState->getProcessState(Rank);
+
+    for (size_t j = 0; j < MList.size(); j++) {
+      Message* M = MList[j];
+      if (M != NULL) {
+        const Request *R = ReceiveRequests[j];
+        NewState->removeMessage(M);
+        memcpy(R->Receive.Data, M->Data, M->Size);
+        if (!MustMatch[j]) {
+          Request *NewR = new Request(*R);
+          NewR->Type = REQUEST_RECV_COMPLETED;
+          int Id = S->findRequestId(R);
+          assert(Id != -1);
+          // We do not wait for this request, so it were not removed by removeRequest
+          S->setRequest(Id, NewR);
+        }
+      }
+    }
+
+    S->removeRequests(RequestIds);
+
+    llvm::GenericValue GV;
+    GV.IntVal = llvm::APInt(sizeof(int) * 8, 0);
+    resumeRun(RootNode, GV);
+
+    Node *N = getNode(NewState);
+    std::stringstream Info;
+
+    Info << Rank << (Status == PS_WAIT?":w/r ":":t/r");
+    RootNode->addArc(Arc(Info.str(), N));
+  }
+}
+
 void StateSpace::computeChilds(Node *RootNode, ProgramState *PState)
 {
   IFVERBOSE(1) {
@@ -166,25 +332,7 @@ void StateSpace::computeChilds(Node *RootNode, ProgramState *PState)
   for (int i = 0; i < PState->getSize(); i++) {
     ProcessState *State = PState->getProcessState(i);
     if (State->getStatus() == PS_WAIT) {
-      int Id = State->getActiveRequest();
-      const Request *R = State->getRequest(Id);
-      if (R->Type == REQUEST_SSEND) {
-        if (PState->checkMessage(R->Msg.get())) {
-          continue;
-        }
-
-        IFVERBOSE(1) {
-          llvm::errs() << "Fast run on rank " << i << " PS_WAIT / SSEND\n";
-        }
-
-        Intr->setProgramState(PState, i);
-        State->removeRequest(Id);
-        resumeRun(RootNode, GV);
-
-        Node *N = getNode(PState);
-        std::stringstream Info;
-        Info << i << ":w/ss ";
-        RootNode->addArc(Arc(Info.str(), N));
+      if (checkFastRunWait(RootNode, PState, i)) {
         return;
       }
     }
@@ -193,56 +341,8 @@ void StateSpace::computeChilds(Node *RootNode, ProgramState *PState)
   for (int i = 0; i < PState->getSize(); i++) {
     ProcessState *State = PState->getProcessState(i);
     ProcessStatus Status = State->getStatus();
-    if (Status == PS_TEST) {
-      IFVERBOSE(1) {
-        llvm::errs() << "Run on rank " << i << " PS_TEST / flag = 0\n";
-      }
-      ProgramState *NewState = new ProgramState(PState);
-      Intr->setProgramState(NewState, i);
-      resumeRun(RootNode, GV);
-      Node *N = getNode(NewState);
-
-      std::stringstream Info;
-      Info << i << ":t0";
-      RootNode->addArc(Arc(Info.str(), N));
-    }
     if (Status == PS_WAIT || Status == PS_TEST) {
-      int Id = State->getActiveRequest();
-      const Request *R = State->getRequest(Id);
-      if (R->Type == REQUEST_RECV) {
-        Messages.clear();
-        PState->collectMessages(i,
-            R->Receive.Sender,
-            R->Receive.Tag,
-            Messages);
-        for (std::vector<Message*>::const_iterator I = Messages.begin();
-            I != Messages.end();
-            ++I) {
-          IFVERBOSE(1) {
-            llvm::errs() << "Run on rank " << i << " PS_TEST|PS_WAIT / RECV\n";
-          }
-
-          ProgramState *NewState = new ProgramState(PState);
-          Intr->setProgramState(NewState, i);
-          // TODO: Check size
-          memcpy(R->Receive.Data, (*I)->Data, (*I)->Size);
-
-          if (State->getFlagPtr()) {
-            *(State->getFlagPtr()) = 1;
-          }
-
-          NewState->getProcessState(i)->removeRequest(Id);
-          NewState->removeMessage(*I);
-
-          resumeRun(RootNode, GV);
-
-          Node *N = getNode(NewState);
-          std::stringstream Info;
-
-          Info << i << (Status == PS_WAIT?":w/r ":":t/r");
-          RootNode->addArc(Arc(Info.str(), N));
-        }
-      }
+      forkWaitOrTest(RootNode, PState, i, Status);
     }
   }
 

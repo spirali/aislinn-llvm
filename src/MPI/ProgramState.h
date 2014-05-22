@@ -70,6 +70,8 @@ class ProgramState
   }
 
   void removeMessage(const Message *M) {
+    std::deque<Ref<Message> >::const_iterator I = findMessage(M);
+    assert(I != Messages.end());
     Messages.erase(findMessage(M));
   }
 
@@ -77,21 +79,41 @@ class ProgramState
     Messages.push_back(M);
   }
 
+  void collectMessages(
+    int Receiver,
+    const std::vector<const Request*> &RecvRequests,
+    const std::vector<bool> &MustMatch,
+    std::vector<std::vector<Message*> >& Out) {
+    std::vector<Message*> Tmp;
+    Tmp.reserve(RecvRequests.size());
+    collectMessagesHelper(Receiver, RecvRequests, MustMatch, 0, Tmp, Out);
+  }
+
+
+
+
   bool checkMessage(const Message *M) const;
 
   std::deque<Ref<Message> >::const_iterator findMessage(const Message *M) const;
   std::deque<Ref<Message> >::iterator findMessage(const Message *M);
-
-  void collectMessages(int Receiver,
-      int Sender,
-      int Tag,
-      std::vector<Message*> &Out);
 
   int messageIndex(const Message *M);
 
   bool isTerminated() const;
   HashDigest computeHash();
   void dump();
+
+
+  private:
+    void collectMessagesHelper(
+        int Receiver,
+        const std::vector<const Request*> &RecvRequests,
+        const std::vector<bool> &MustMatch,
+        int Index,
+        std::vector<Message*> &Matched,
+        std::vector<std::vector<Message*> >& Out);
+
+
 };
 
 }
