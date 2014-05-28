@@ -11,8 +11,8 @@
 #define AISLINN_NODE
 
 #include "../Utils/HashDigest.h"
+#include "Action.h"
 
-#include<string>
 #include<vector>
 
 namespace aislinn {
@@ -22,31 +22,42 @@ class Node;
 class Arc
 {
   public:
-    Arc(const std::string &Message, Node *TargetNode) :
-      Message(Message), TargetNode(TargetNode) {}
-    std::string Message;
+
+    Arc(Node *TargetNode, const std::vector<Action> &Actions) :
+      TargetNode(TargetNode), Actions(Actions) {}
     Node *TargetNode;
+    std::vector<Action> Actions;
 };
 
 class Node
 {
+  int Distance;
+  Node *PrevNode;
   HashDigest Hash;
   std::vector<Arc> Arcs;
 
   public:
-  Node(const HashDigest &Hash);
+  Node(const HashDigest &Hash = HashDigest());
 
   const std::vector<Arc> & getArcs() const {
     return Arcs;
   }
 
   void addArc(const Arc &A) {
+    updateDistance(A);
     Arcs.push_back(A);
   }
 
   HashDigest getHash() const {
     return Hash;
   }
+
+  Node *getPrevNode() const {
+    return PrevNode;
+  }
+
+  protected:
+  void updateDistance(const Arc &A);
 };
 
 }

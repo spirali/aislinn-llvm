@@ -28,10 +28,10 @@ ErrorTy::~ErrorTy()
 
 }
 
-void ErrorTy::writeReport(XML &Report)
+void ErrorTy::writeReport(StateSpace &SSpace, XML &Report)
 {
     Report.child("error");
-    writeReportBody(Report);
+    writeReportBody(SSpace, Report);
     Report.back(); // error
 }
 
@@ -40,9 +40,10 @@ class DeadlockError : public ErrorTy
   public:
     DeadlockError(Node *ErrorNode): ErrorTy(ErrorNode) {}
 
-    void writeReportBody(XML &Report) {
+    void writeReportBody(StateSpace &SSpace, XML &Report) {
       Report.set("type", "deadlock");
-      Report.simpleChild("description", "Deadlock found");
+      Report.simpleChild("description", "Deadlock");
+      SSpace.writePathToNode(ErrorNode, Report);
     }
 };
 
@@ -55,13 +56,14 @@ class NonzeroExitCodeError : public ErrorTy
     NonzeroExitCodeError(Node *ErrorNode, int Rank, int ExitCode) :
       ErrorTy(ErrorNode), Rank(Rank), ExitCode(ExitCode) {}
 
-    void writeReportBody(XML &Report) {
+    void writeReportBody(StateSpace &SSpace, XML &Report) {
       Report.set("type", "exitcode");
       Report.set("rank", Rank);
       Report.set("exitcode", ExitCode);
       std::stringstream Description;
       Description << "Rank " << Rank << " exited with code " << ExitCode;
       Report.simpleChild("description", Description.str());
+      SSpace.writePathToNode(ErrorNode, Report);
     }
 };
 
@@ -89,13 +91,18 @@ StateSpace::StateSpace(
     exit(1);
   }
 
+  InitialNode = new Node();
+
   for (int i = 0; i < PState->getSize(); i++) {
     Intr->setProgramState(PState, i);
     Intr->callFunctionAsMain(MainFunction, Args);
     Intr->run();
     afterRunAction(NULL);
   }
-  InitialNode = getNode(PState);
+
+  Node *N = getNode(PState);
+  InitialNode->addArc(Arc(N, PState->getActions()));
+  PState->clearActions();
 }
 
 void StateSpace::build()
@@ -124,6 +131,24 @@ Node* StateSpace::getNode(ProgramState *PState)
   return N;
 }
 
+static void writeNode(FILE *f, Node *N, char *HashString)
+{
+  N->getHash().toString(HashString);
+  HashString[6] = 0;
+  fprintf(f, "S%p [label=\"%s\"]\n", N, HashString);
+  size_t S = N->getArcs().size();
+  for (size_t j = 0; j < S; ++j) {
+    const Arc &A = N->getArcs()[j];
+    int V = -1;
+    if (A.Actions.size()) {
+      V = A.Actions[0].getRank();
+    }
+    fprintf(f, "S%p -> S%p [label=\"%i/%lu\"]\n",
+        N, A.TargetNode, V, A.Actions.size());
+  }
+
+}
+
 void StateSpace::writeDotFile(const std::string &Filename) const
 {
   IFVERBOSE(2) {
@@ -134,17 +159,10 @@ void StateSpace::writeDotFile(const std::string &Filename) const
   fprintf(f, "digraph X {\n");
   std::map<HashDigest, Node*>::const_iterator I, E;
   char *HashString = ALLOCA_STRING_FOR_HASH;
+  writeNode(f, InitialNode, HashString); // Initial node has not hash
   for (I = Nodes.begin(), E = Nodes.end(); I != E; ++I) {
     Node *N = I->second;
-    N->getHash().toString(HashString);
-    HashString[6] = 0;
-    fprintf(f, "S%p [label=\"%s\"]\n", N, HashString);
-    size_t S = N->getArcs().size();
-    for (size_t j = 0; j < S; ++j) {
-      const Arc &A = N->getArcs()[j];
-      fprintf(f, "S%p -> S%p [label=\"%s\"]\n",
-          N, A.TargetNode, A.Message.c_str());
-    }
+    writeNode(f, N, HashString);
   }
   fprintf(f, "}\n");
   fclose(f);
@@ -184,21 +202,8 @@ bool StateSpace::checkFastRunWait(
   resumeRun(RootNode, GV);
 
   Node *N = getNode(PState);
-  std::stringstream Info;
-  Info << Rank << ":w/";
-
-  for (size_t i = 0; i < RequestIds.size(); i++) {
-    const Request *R = State->getRequest(RequestIds[i]);
-    switch (R->Type) {
-      case REQUEST_SSEND:
-        Info << "ss;";
-        break;
-      default:
-        llvm_unreachable("Invalid request type");
-    }
-  }
-
-  RootNode->addArc(Arc(Info.str(), N));
+  RootNode->addArc(Arc(N, PState->getActions()));
+  PState->clearActions();
   return true;
 }
 
@@ -220,9 +225,8 @@ void StateSpace::forkWaitOrTest(
     resumeRun(RootNode, GV);
     Node *N = getNode(NewState);
 
-    std::stringstream Info;
-    Info << Rank << ":t0";
-    RootNode->addArc(Arc(Info.str(), N));
+    RootNode->addArc(Arc(N, PState->getActions()));
+    PState->clearActions();
   }
 
   ProcessState *State = PState->getProcessState(Rank);
@@ -309,10 +313,8 @@ void StateSpace::forkWaitOrTest(
     resumeRun(RootNode, GV);
 
     Node *N = getNode(NewState);
-    std::stringstream Info;
-
-    Info << Rank << (Status == PS_WAIT?":w/r ":":t/r");
-    RootNode->addArc(Arc(Info.str(), N));
+    RootNode->addArc(Arc(N, PState->getActions()));
+    PState->clearActions();
   }
 }
 
@@ -366,7 +368,7 @@ void StateSpace::writeReport(XML &Report)
   Report.back();
 
   for (size_t i = 0; i < Errors.size(); i++) {
-    Errors[i]->writeReport(Report);
+    Errors[i]->writeReport(*this, Report);
   }
 }
 
@@ -388,3 +390,35 @@ void StateSpace::afterRunAction(Node *N)
     }
   }
 }
+
+void StateSpace::writePathToNode(Node *N, XML &Report)
+{
+  Report.child("path");
+  std::vector<const Arc*> Path;
+  for(;;) {
+    Node *P = N->getPrevNode();
+    if (P == NULL) {
+      break;
+    }
+    const std::vector<Arc> &Arcs = P->getArcs();
+    size_t i;
+    for (i = 0; i < Arcs.size(); i++) {
+      if (Arcs[i].TargetNode == N) {
+        break;
+      }
+    }
+    assert(i != Arcs.size());
+    Path.push_back(&Arcs[i]);
+    N = P;
+  };
+
+  std::vector<const Arc*>::reverse_iterator I;
+  for (I = Path.rbegin(); I != Path.rend(); ++I) {
+    const Arc* A = *I;
+    for (size_t i = 0; i < A->Actions.size(); i++) {
+      A->Actions[i].write(Report);
+    }
+  }
+  Report.back();
+}
+

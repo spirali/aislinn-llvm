@@ -64,9 +64,11 @@ static GenericValue lle_X_MPI_Isend(FunctionType *FT,
   ProgramState *PState = getInterpreter()->getProgramState();
   ProcessState *State = getInterpreter()->getProcessState();
 
+  int Rank = PState->getRank(State);
+
   Message *M = new Message(Data, Size);
   M->Receiver = Target;
-  M->Sender = PState->getRank(State);
+  M->Sender = Rank;
   M->Tag = Tag;
   PState->addMessage(M);
 
@@ -75,6 +77,9 @@ static GenericValue lle_X_MPI_Isend(FunctionType *FT,
   R->Msg = Ref<Message>(M);
   int Id = State->newRequest(R);
   *RequestIdPtr = Id;
+
+  PState->addAction(Action::makePtp(ACTION_ISEND, Rank, Target, Tag, Id));
+
   //memcpy(RequestPtr, &R, sizeof(void*));
 
   /*if (State2->Status != PS_RECEIVE_PAUSE || State2->OtherProcess != State) {
@@ -112,6 +117,8 @@ static GenericValue lle_X_MPI_Irecv(FunctionType *FT,
 
   ProcessState *State = getInterpreter()->getProcessState();
   ProgramState *PState = getInterpreter()->getProgramState();
+  int Rank = PState->getRank(State);
+
   Request *R = new Request;
   R->Type = REQUEST_RECV;
   R->Receive.Sender = Sender;
@@ -123,21 +130,8 @@ static GenericValue lle_X_MPI_Irecv(FunctionType *FT,
   int Id = State->newRequest(R);
   *RequestIdPtr = Id;
 
-  /*int From = (int) Args[0].IntVal.getZExtValue();
-  ProcessState *State2 = PState->getProcessState(From);
+  PState->addAction(Action::makePtp(ACTION_IRECV, Rank, Sender, Tag, Id));
 
-  GenericValue GV;
-  if (State2->Status != PS_SEND_PAUSE || State2->OtherProcess != State) {
-    State->Status = PS_RECEIVE_PAUSE;
-    State->OtherProcess = State2;
-    getInterpreter()->pause();
-    return GV;
-  }
-
-  State2->Status = PS_SEND_READY;
-  State2->OtherProcess = NULL;
-  GV.IntVal = MAKE_INT(State2->Data);
-  return GV;*/
   GenericValue GV;
   GV.IntVal = MAKE_INT(0);
   return GV;
@@ -145,21 +139,14 @@ static GenericValue lle_X_MPI_Irecv(FunctionType *FT,
 
 static GenericValue lle_X_MPI_Wait(FunctionType *FT,
                                const std::vector<GenericValue> &Args) {
-  //ProgramState *PState = getInterpreter()->getProgramState();
-
   assert(Args.size() == 2);
-
-  /*void *Data = static_cast<void*>(Args[0].PointerVal);
-  int Count = static_cast<int>(Args[1].IntVal.getZExtValue());
-  size_t Size = Count * sizeof(int);
-  int Sender = static_cast<int>(Args[3].IntVal.getZExtValue());
-  int Tag = static_cast<int>(Args[4].IntVal.getZExtValue());*/
   int *RequestIdPtr = static_cast<int*>(Args[0].PointerVal);
-
-  /*RecvRequest *R = new RecvRequest(Sender, Tag, Data, Size);
-  *RequestPtr = R;*/
   ProcessState *State = getInterpreter()->getProcessState();
-  State->setWait(*RequestIdPtr);
+  ProgramState *PState = getInterpreter()->getProgramState();
+  int RequestId = *RequestIdPtr;
+  State->setWait(RequestId);
+  int Rank = PState->getRank(State);
+  PState->addAction(Action::makeWaitTest(ACTION_WAIT, Rank, RequestId));
   getInterpreter()->pause();
 
   GenericValue GV;
@@ -182,8 +169,10 @@ static GenericValue lle_X_MPI_Waitall(FunctionType *FT,
 
   // TODO: Check that each request is unique
 
+  ProgramState *PState = getInterpreter()->getProgramState();
   ProcessState *State = getInterpreter()->getProcessState();
-
+  int Rank = PState->getRank(State);
+  PState->addAction(Action::makeWaitTestAll(ACTION_WAITALL, Rank, Requests));
 
   State->setWait(Requests);
   getInterpreter()->pause();
@@ -199,16 +188,18 @@ static GenericValue lle_X_MPI_Test(FunctionType *FT,
   int *RequestIdPtr = static_cast<int*>(Args[0].PointerVal);
   int *FlagPtr = static_cast<int*>(Args[1].PointerVal);
   *FlagPtr = 0; // Initialize to 0, so if the message is not ready we can directly continue
+  ProgramState *PState = getInterpreter()->getProgramState();
   ProcessState *State = getInterpreter()->getProcessState();
-  State->setTest(*RequestIdPtr, FlagPtr);
+  int RequestId = *RequestIdPtr;
+  State->setTest(RequestId, FlagPtr);
+  int Rank = PState->getRank(State);
+  PState->addAction(Action::makeWaitTest(ACTION_TEST, Rank, RequestId));
   getInterpreter()->pause();
 
   GenericValue GV;
   GV.IntVal = MAKE_INT(0);
   return GV;
 }
-
-
 
 void InterpreterMPI::initializeMPICalls()
 {
@@ -223,7 +214,7 @@ void InterpreterMPI::initializeMPICalls()
 void InterpreterMPI::setProgramState(ProgramState *PS, int Rank)
 {
   ProcessState *S = PS->getProcessState(Rank);
-  IFVERBOSE(1) {
+  IFVERBOSE(2) {
     errs() << "Set program state=" << PS << " process state=" << S << " rank=" << Rank << "\n";
   }
   PState = PS;

@@ -27,8 +27,7 @@ class HashDigest {
 
   public:
   HashDigest() {
-    Ptr = malloc(size());
-    memset(Ptr, 0, size());
+    Ptr = NULL;
   }
 
   explicit HashDigest(MHASH HashThread) {
@@ -36,6 +35,10 @@ class HashDigest {
   }
 
   HashDigest(const HashDigest &Digest) {
+    if (Digest.isNull()) {
+      Ptr = NULL;
+      return;
+    }
     size_t Size = size();
     Ptr = malloc(Size);
     memcpy(Ptr, Digest.Ptr, Size);
@@ -49,8 +52,21 @@ class HashDigest {
 
   HashDigest& operator=(const HashDigest& Other)
   {
-      memcpy(Ptr, Other.Ptr, size());
-      return *this;
+    if (this != &Other) {
+      if (Other.isNull()) {
+        if (!isNull()) {
+          free(Ptr);
+          Ptr = NULL;
+        }
+        return *this;
+      }
+      size_t Size = size();
+      if (isNull()) {
+        Ptr = malloc(Size);
+      }
+      memcpy(Ptr, Other.Ptr, Size);
+    }
+    return *this;
   }
 
   size_t size() const {
@@ -58,6 +74,10 @@ class HashDigest {
   }
 
   void toString(char *Out) const;
+
+  bool isNull() const {
+    return Ptr == NULL;
+  }
 
   bool operator==(const HashDigest& Rhs) const {
     return memcmp(Ptr, Rhs.Ptr, size()) == 0;

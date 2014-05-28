@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ProcessState.h"
+#include "Action.h"
 #include "../Utils/HashDigest.h"
 
 namespace aislinn {
@@ -24,6 +25,7 @@ class ProgramState
 
   std::vector<ProcessState*> Processes;
   std::deque<Ref<Message> > Messages;
+  std::vector<Action> Actions;
 
   public:
   explicit ProgramState(int ProcessCount);
@@ -89,9 +91,6 @@ class ProgramState
     collectMessagesHelper(Receiver, RecvRequests, MustMatch, 0, Tmp, Out);
   }
 
-
-
-
   bool checkMessage(const Message *M) const;
 
   std::deque<Ref<Message> >::const_iterator findMessage(const Message *M) const;
@@ -103,6 +102,17 @@ class ProgramState
   HashDigest computeHash();
   void dump();
 
+  void addAction(const Action &A) {
+    Actions.push_back(A);
+  }
+
+  const std::vector<Action> & getActions() const {
+    return Actions;
+  }
+
+  void clearActions() {
+    Actions.clear();
+  }
 
   private:
     void collectMessagesHelper(
@@ -112,8 +122,6 @@ class ProgramState
         int Index,
         std::vector<Message*> &Matched,
         std::vector<std::vector<Message*> >& Out);
-
-
 };
 
 }

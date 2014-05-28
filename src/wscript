@@ -15,6 +15,7 @@ source_files = (
         "MPI/Node.cpp",
         "MPI/Request.cpp",
         "MPI/Message.cpp",
+        "MPI/Action.cpp",
         "Utils/XML.cpp",
         "Utils/Hash.cpp",
         "Utils/HashDigest.cpp",

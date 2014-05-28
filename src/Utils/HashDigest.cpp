@@ -26,6 +26,7 @@ void HashDigest::toString(char *Out) const
   size_t Size = size();
   if (Ptr == NULL) {
     strncpy(Out, "<NULL>", Size);
+    return;
   }
   for (size_t i = 0; i < Size; i++) {
     char Byte = ((char*) Ptr)[i];

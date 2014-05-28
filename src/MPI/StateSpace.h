@@ -22,16 +22,18 @@ namespace aislinn {
 
 class XML;
 class Node;
+class StateSpace;
 
 class ErrorTy {
-  Node *ErrorNode;
+  protected:
+    Node *ErrorNode;
 
   public:
     ErrorTy(Node *ErrorNode);
     virtual ~ErrorTy();
-    void writeReport(XML &Report);
+    void writeReport(StateSpace &SSpace, XML &Report);
   protected:
-    virtual void writeReportBody(XML &Report) = 0;
+    virtual void writeReportBody(StateSpace &SSPace, XML &Report) = 0;
 };
 
 class StateSpace
@@ -63,6 +65,8 @@ class StateSpace
   void writeReport(XML &Report);
   void computeChilds(Node *RootNode, ProgramState *PState);
   void addError(ErrorTy *Error);
+
+  void writePathToNode(Node *N, XML &Report);
 
   private:
     void resumeRun(Node *N, const llvm::GenericValue &value) {

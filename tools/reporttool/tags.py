@@ -1,11 +1,11 @@
 
 class Tag:
 
-    def __init__(self, name, text=None, **kw):
+    def __init__(self, name, text="", **kw):
         self.name = name
         self.attributes = []
         self.childs = []
-        self.text = text
+        self.text = str(text)
         for k in kw:
             self.attributes.append((k, kw[k]))
 
