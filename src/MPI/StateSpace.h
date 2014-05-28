@@ -53,10 +53,12 @@ class StateSpace
     return Intr;
   }
 
+  int getErrorsSize() const {
+    return Errors.size();
+  }
+
   void build();
   Node* getNode(ProgramState *PState);
-
-
   void writeDotFile(const std::string &Filename) const;
   void writeReport(XML &Report);
   void computeChilds(Node *RootNode, ProgramState *PState);

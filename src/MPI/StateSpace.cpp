@@ -126,7 +126,7 @@ Node* StateSpace::getNode(ProgramState *PState)
 
 void StateSpace::writeDotFile(const std::string &Filename) const
 {
-  IFVERBOSE(1) {
+  IFVERBOSE(2) {
     llvm::errs() << "Writing .dot file\n";
   }
 
@@ -173,7 +173,7 @@ bool StateSpace::checkFastRunWait(
     }
   }
 
-  IFVERBOSE(1) {
+  IFVERBOSE(2) {
     llvm::errs() << "Fast run on rank " << Rank << " Wait / SSEND\n";
   }
 
@@ -209,7 +209,7 @@ void StateSpace::forkWaitOrTest(
     ProcessStatus Status)
 {
   if (Status == PS_TEST) {
-    IFVERBOSE(1) {
+    IFVERBOSE(2) {
       llvm::errs() << "Fork on rank " << Rank << " PS_TEST / flag = 0\n";
     }
     ProgramState *NewState = new ProgramState(PState);
@@ -272,7 +272,7 @@ void StateSpace::forkWaitOrTest(
 
   for (int i = 0; i < MessageMatches.size(); i++) {
     std::vector<Message*> &MList = MessageMatches[i];
-    IFVERBOSE(1) {
+    IFVERBOSE(2) {
       llvm::errs() << "Fork on rank " << Rank << " PS_TEST|PS_WAIT / RECV\n";
     }
 
@@ -318,9 +318,9 @@ void StateSpace::forkWaitOrTest(
 
 void StateSpace::computeChilds(Node *RootNode, ProgramState *PState)
 {
-  IFVERBOSE(1) {
+  IFVERBOSE(2) {
     llvm::errs() << "Processing node " << this << "\n";
-    IFVERBOSE(2) {
+    IFVERBOSE(3) {
       PState->dump();
     }
   }

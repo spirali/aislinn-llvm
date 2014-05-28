@@ -50,7 +50,9 @@ namespace {
             cl::desc("<program arguments>..."));
 
   cl::opt<int>
-  VerbosityLevelArg("verbose", cl::desc("Verbosity level. Default: 0"), cl::init(0));
+  VerbosityLevelArg("verbose",
+                    cl::desc("Verbosity level. Default: 1"),
+                    cl::init(1));
 
   cl::opt<std::string>
   AddressSpaceSizeStr("address-space-size",
@@ -106,7 +108,7 @@ static bool init(int argc, char **argv) {
 
 static void writeReport(StateSpace &SSpace)
 {
-  IFVERBOSE(1) {
+  IFVERBOSE(2) {
     errs() << "Writing report file\n";
   }
 
@@ -165,5 +167,13 @@ int main(int argc, char **argv, char* const* envp)
     SSpace.writeDotFile("statespace.dot");
   }
   writeReport(SSpace);
+  IFVERBOSE(1) {
+    int Errors = SSpace.getErrorsSize();
+    if (Errors == 0) {
+      outs() << "No errors found\n";
+    } else {
+      outs() << Errors << " errors(s) found\n";
+    }
+  }
   return 0;
 }
